@@ -1,3 +1,43 @@
+var fallbackFaker = {
+	forString: function (field) {
+		var str = faker.lorem.sentence(field.max);
+
+		if (field.max)
+			return str.substr(0, field.max);
+
+		return str;
+	},
+	forNumber: function (field) {
+		var max = field.max || 1000,
+			min = field.min || 1;
+
+		return _.random(min, max);
+	},
+	forBoolean: function () {
+		return (_.random(1, 1000) % 2) == 0;
+	},
+	generate: function (field, type) {
+		// some fallbacks in case seeder is not set.
+		if (_.isString(type)) {
+			return this.forString(field);
+		}
+
+		if (_.isNumber(type)) {
+			return this.forNumber(field);
+		}
+
+		if (_.isBoolean(type)) {
+			return this.forBoolean();
+		}
+
+		if (_.isDate(type)) {
+			return faker.date.past();
+		}
+
+		return null;
+	}
+};
+
 Seeder = function (config) {
 	var schema = null;
 
@@ -24,46 +64,46 @@ Seeder = function (config) {
 	    }, faker || self);
 	}
 
-	function dataFor (field) {
-		var type = new field.type;
+	function dataFor (name) {
+		var field = schema[name],
+			type = new field.type;
 
 		if (_.has(field, 'seeder')){
 			return getFaker(field.seeder, true)();
 		}
 
-		// some fallbacks in case seeder is not set.
-		if (_.isString(type)) {
-			var str = faker.lorem.sentence(field.max);
+		if (_.isArray(type)) {
+			var data = [],
+				realType = new schema[name +'.$'].type,
+				max = field.maxCount || _.random(2, 10),
+				min = field.minCount || 1;
 
-			if (field.max)
-				return str.substr(field.max);
+			if (min > max)
+				max = min + 1;
 
-			return str;
+			_(_.random(min, max)).times(function () {
+				data.push(fallbackFaker.generate(field, realType));
+			});
+
+			return data;
 		}
 
-		if (_.isNumber(type)) {
-			var max = field.max || 1000,
-				min = field.min || 1;
-
-			return _.random(min, max);
-		}
-
-		if (_.isBoolean(type)) {
-			return (_.random(1, 1000) % 2) == 0;
-		}
-
-		if (_.isDate(type)) {
-			return faker.date.past();
-		}
+		return fallbackFaker.generate(field, type);
 	}
 
 	_(options.total).times(function (n) {
 		var data = {};
 		_.each(_.keys(schema), function (property) {
-			data[property] = dataFor(schema[property]);
+			if (property.indexOf('.$') > 0)
+				return;
+
+			data[property] = dataFor(property);
 		});
+
+		// console.log(data);
+		options.collection.insert(data);
 	});
-}
+};
 
 SimpleSchema.extendOptions({
 	seeder: Match.Optional(String)
