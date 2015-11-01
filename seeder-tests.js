@@ -34,7 +34,10 @@ Tinytest.add('Seeder - Creates Expected Number of Entries', function (test) {
 
 	var count = Items.find().count();
 	test.equal(count, 5);
+
+	Items.remove({});
 });
+
 
 Tinytest.add('Seeder - Throws error if config is wrong', function (test) {
 	test.throws(function () {
