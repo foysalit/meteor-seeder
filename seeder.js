@@ -1,11 +1,7 @@
 var fallbackFaker = {
 	forString: function (field) {
-		var str = faker.lorem.sentence(field.max);
-
-		if (field.max)
-			return str.substr(0, field.max);
-
-		return str;
+		var str = faker.lorem.sentence();
+		return validatedData.get(field, str);
 	},
 	forNumber: function (field) {
 		var max = field.max || 1000,
@@ -35,6 +31,21 @@ var fallbackFaker = {
 		}
 
 		return null;
+	}
+};
+
+var validatedData = {
+	forString: function (field, str) {
+		if (field.max)
+			return str.substr(0, field.max-1);
+
+		return str;
+	},
+	get: function (field, data) {
+		if (_.isString(data))
+			return this.forString(field, data);
+
+		return data;
 	}
 };
 
@@ -69,7 +80,8 @@ Seeder = function (config) {
 			type = new field.type;
 
 		if (_.has(field, 'seeder')){
-			return getFaker(field.seeder, true)();
+			var data = getFaker(field.seeder, true)();
+			return validatedData.get(field, data);
 		}
 
 		if (_.isArray(type)) {
