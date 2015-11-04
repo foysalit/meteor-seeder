@@ -12,8 +12,17 @@ var fallbackFaker = {
 	forBoolean: function () {
 		return (_.random(1, 1000) % 2) == 0;
 	},
+	forDocument: function (field) {
+		var subSeeder = new Seeder({collection: field.seeder});
+
+		return _.first(subSeeder.results);
+	},
 	generate: function (field, type) {
 		// some fallbacks in case seeder is not set.
+		if (field.seeder instanceof Mongo.Collection) {
+			return this.forDocument(field);
+		}
+
 		if (_.isString(type)) {
 			return this.forString(field);
 		}
@@ -49,8 +58,19 @@ var validatedData = {
 	}
 };
 
+// From StackOverflow - http://stackoverflow.com/a/22129960/1079478
+function getFaker (method, safe) {
+	// console.log(method);
+    return method.split('.').reduce(function(prev, curr) {
+        return !safe ? prev[curr] : (prev ? prev[curr] : undefined)
+    }, faker || self);
+}
+
 Seeder = function (config) {
-	var schema = null;
+	this.results = [];
+
+	var self = this,
+		schema = null;
 
 	var options = _.extend({
 		collection: null,
@@ -68,21 +88,9 @@ Seeder = function (config) {
 
 	schema = schema.schema();
 
-	// From StackOverflow - http://stackoverflow.com/a/22129960/1079478
-	function getFaker (method, safe) {
-	    return method.split('.').reduce(function(prev, curr) {
-	        return !safe ? prev[curr] : (prev ? prev[curr] : undefined)
-	    }, faker || self);
-	}
-
-	function dataFor (name) {
+	function getData (name) {
 		var field = schema[name],
 			type = new field.type;
-
-		if (_.has(field, 'seeder')){
-			var data = getFaker(field.seeder, true)();
-			return validatedData.get(field, data);
-		}
 
 		if (_.isArray(type)) {
 			var data = [],
@@ -94,13 +102,25 @@ Seeder = function (config) {
 				max = min + 1;
 
 			_(_.random(min, max)).times(function () {
-				data.push(fallbackFaker.generate(field, realType));
+				data.push(getDataFromSeeder(field, realType));
 			});
 
 			return data;
 		}
 
-		return fallbackFaker.generate(field, type);
+		return getDataFromSeeder(field, type);
+	}
+
+	function getDataFromSeeder (field, type) {
+		var data = null;
+
+		if (_.has(field, 'seeder') && _.isString(field.seeder)){
+			data = getFaker(field.seeder, true)();
+		} else {
+			data = fallbackFaker.generate(field, type)
+		}
+
+		return validatedData.get(field, data);
 	}
 
 	_(options.total).times(function (n) {
@@ -109,14 +129,16 @@ Seeder = function (config) {
 			if (property.indexOf('.$') > 0)
 				return;
 
-			data[property] = dataFor(property);
+			data[property] = getData(property);
 		});
 
 		// console.log(data);
-		options.collection.insert(data);
+		self.results.push(options.collection.insert(data));
 	});
+
+	return this;
 };
 
 SimpleSchema.extendOptions({
-	seeder: Match.Optional(String)
+	seeder: Match.Optional(Match.OneOf(String, Mongo.Collection))
 });

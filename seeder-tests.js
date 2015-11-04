@@ -1,4 +1,13 @@
 Items = new Mongo.Collection('items');
+Children = new Mongo.Collection('children');
+
+Children.attachSchema(new SimpleSchema({
+    title: {
+        type: String,
+        max: 15,
+        seeder: 'lorem.sentence'
+    }
+}));
 
 Items.attachSchema(new SimpleSchema({
     title: {
@@ -23,6 +32,10 @@ Items.attachSchema(new SimpleSchema({
     },
     updatedAt: {
         type: [Date]
+    },
+    baby: {
+        type: String,
+        seeder: Children
     }
 }));
 
@@ -33,9 +46,16 @@ Tinytest.add('Seeder - Creates Expected Number of Entries', function (test) {
 	});
 
 	var count = Items.find().count();
-	test.equal(count, 5);
+    test.equal(count, 5);
+	test.equal(Children.find().count(), 5);
+
+    var oneItem = Items.findOne(),
+        oneChild = Children.findOne(oneItem.baby);
+        
+    test.equal(oneItem.baby, oneChild._id);
 
 	Items.remove({});
+    Children.remove({});
 });
 
 
